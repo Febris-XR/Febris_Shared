@@ -131,11 +131,11 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           fi
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Tag '$TAG' does not yield a NuGet version. Expected vMAJOR.MINOR.PATCH[-prerelease]."
+            echo "::error::'$VERSION' is not a NuGet version. Expected MAJOR.MINOR.PATCH[-prerelease]."
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version $VERSION from tag $TAG"
+          echo "Publishing version $VERSION"
 
       # -p:Version also stamps the intra-triad dependency versions, so
       # Febris.SharedServices depends on Febris.ModelLibrary at exactly this version
