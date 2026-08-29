@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- NET8 Wave 1: leaf lib, zero deps. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Configurations>Debug;Release;Staging;NotStaging</Configurations>
+  </PropertyGroup>
+
+
+  <!-- NuGet packaging. These three ship as Apache-2.0 packages from the febris-shared
+       repository's CI (owner ruling 2026-08-28, relicensed from AGPL-3.0-only; the packaging moved
+       out of the node with the triad extraction, see docs/decisions/TRIAD_OWNERSHIP.md). Without
+       this block `dotnet
+       pack` emits authors="<project name>" and description="Package Description" with NO licence
+       element at all, which must never reach nuget.org.
+       Version and RepositoryUrl are deliberately NOT set here: CI supplies them from the release
+       tag and the repository it is running in, so the package cannot disagree with the commit it
+       was built from. -->
+  <PropertyGroup>
+    <PackageId>Febris.EnumLibrary</PackageId>
+    <Authors>Febris</Authors>
+    <Product>Febris Node</Product>
+    <Description>Shared enumerations for the Febris node platform: package kinds, xAPI verb and extension IRIs, storage areas, and the request/service plumbing enums the node tiers agree on.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageTags>febris;lms;xapi;node</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+</Project>

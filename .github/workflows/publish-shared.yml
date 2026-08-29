@@ -1,0 +1,320 @@
+name: publish-shared
+
+# Pack the three Apache-2.0 shared libraries -- Febris.EnumLibrary,
+# Febris.ModelLibrary, Febris.SharedServices -- and push them to nuget.org,
+# versioned from the tag that triggered the run.
+#
+# These three are the contract the rest of the Febris client tiers compile against.
+# Those client repositories -- the Windows/PC client, the Android suite, the simulation
+# SDKs -- are not yet published. They consume the triad from nuget.org rather than by
+# project reference, so this workflow is what they will restore from.
+#
+#
+# == THE DEPENDENCY GATE ===========================================================
+#
+# Febris.ModelLibrary depends on Febris.XApi.Models as a PackageReference, pinned to a
+# version published from the febris-xapi-models repository. That version MUST be live on
+# nuget.org before this workflow runs, or every consumer restoring Febris.ModelLibrary
+# gets NU1101 and the package is dead on arrival. A push to nuget.org cannot be undone:
+# a bad version can be unlisted but never deleted, and the number is burned forever.
+#
+# WHAT THIS WORKFLOW DOES ABOUT IT: it packs first, then audits the packed .nuspec of
+# every artifact and FAILS THE JOB BEFORE THE PUSH STEP if any Febris.* dependency is
+# neither part of this push nor the named external keystone. Do not "fix" the audit by
+# loosening it. It is the only thing standing between a typo in the dependency graph and
+# a permanent bad version on nuget.org.
+#
+# (Historical note: this section once described the keystone as vendored in-tree and
+# absent from nuget.org. Febris.XApi.Models 0.1.0 went live on 2026-08-28 and the
+# vendored copy is gone -- the cut refuses to produce this export if it rides along.)
+#
+# == PACKAGE METADATA LIVES IN THE CSPROJS =========================================
+#
+# PackageId, Authors, Description, PackageLicenseExpression (Apache-2.0), RepositoryUrl
+# and RepositoryType are set in each project file, where a diff reviews them and a
+# maintainer packing locally gets the same package CI would build. Only the version
+# comes from CI, because only CI knows the tag. The audit step checks each of these on
+# the packed artifact rather than by grepping the csproj, so it cannot be satisfied by
+# anything except a correct package.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # A rehearsal path that cannot reach nuget.org. Packs and audits, then stops: the
+  # login and push steps are gated so a dry run never mints a credential it will not
+  # use. The only way to publish from a dispatch is to untick dry_run deliberately.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to pack, without the leading v (e.g. 0.1.0)'
+        required: true
+      dry_run:
+        description: 'Pack and audit, but do not push to nuget.org'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  NUGET_SOURCE: 'https://api.nuget.org/v3/index.json'
+
+  # SINGLE SOURCE OF TRUTH for what this workflow publishes. The pack step, the
+  # nuspec audit and the push step all read this list. Nothing else names a package.
+  # Dependency order, bottom-up. Each project's <PackageId> must equal its file name
+  # -- the audit fails loudly on any package id it did not expect, so a mismatch is
+  # caught rather than published.
+  PACKAGE_PROJECTS: |
+    shared/FebrisEnumLibrary/Febris.EnumLibrary.csproj
+    shared/FebrisModelLibrary/Febris.ModelLibrary.csproj
+    shared/FebrisSharedServices/Febris.SharedServices.csproj
+
+jobs:
+  publish:
+    name: pack + push the shared triad
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Add a required reviewer to this environment in repository settings to make the push
+    # a human-approved step. GitHub creates the environment on first use with no
+    # protection rules, so declaring it here is safe but is NOT protection by itself.
+    # The nuget.org Trusted Publishing policy for this repository binds to this
+    # environment name.
+    environment: nuget-release
+
+    # Trusted Publishing needs id-token: write so the job can ask GitHub for a
+    # short-lived OIDC token. Naming any permission drops every other scope to none,
+    # hence contents: read for the checkout.
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # Actions are pinned to full commit SHAs, not tags. This job can mint a short-lived
+      # nuget.org publish key via OIDC, and a tag is mutable: whoever can move v4 can run
+      # code inside the job that obtains that key.
+      # That is the tj-actions/changed-files shape. The trailing comment is for humans and the SHA
+      # is what actually resolves.
+      #
+      # These are the same three pins release/xapi-models-repo/.github/workflows/pack.yml carries,
+      # deliberately. The v4 tags they replace ALL resolve to node20 actions, and a SHA pin has no
+      # upgrade path, so pinning at v4 would have frozen this file onto a runtime being removed.
+      # Verified before bumping: every input this workflow passes still exists at the new version,
+      # and checkout's input set is identical across the two.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+
+      # The tag is the single source of the package version. v1.2.3 -> 1.2.3,
+      # v0.1.0-rc.1 -> 0.1.0-rc.1. Anything else stops the run here rather than
+      # producing a package numbered by accident.
+      - name: Resolve the version
+        id: version
+        shell: bash
+        # The dispatch input arrives through the ENVIRONMENT, never through expression
+        # interpolation into the script body. An interpolated expression is pasted in as
+        # literal text before bash starts, so a malicious input would execute before the
+        # regex below ever sees it. As an env var the value is data.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$VERSION_INPUT"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '$TAG' does not yield a NuGet version. Expected vMAJOR.MINOR.PATCH[-prerelease]."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $VERSION from tag $TAG"
+
+      # -p:Version also stamps the intra-triad dependency versions, so
+      # Febris.SharedServices depends on Febris.ModelLibrary at exactly this version
+      # rather than at the 1.0.0 the project files imply.
+      - name: Pack
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          while read -r proj; do
+            [ -z "$proj" ] && continue
+            dotnet pack "$proj" -c Release \
+              -p:Version="$VERSION" \
+              -p:ContinuousIntegrationBuild=true \
+              -o artifacts
+          done <<< "$PACKAGE_PROJECTS"
+          ls -l artifacts
+
+      # THE GATE. Everything above this step is local and reversible. Everything below
+      # it is permanent. See the ORDERING HAZARD and METADATA notes at the top of this
+      # file for why each check is here.
+      - name: Audit the packed nuspecs
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, sys, glob, zipfile
+          import xml.etree.ElementTree as ET
+
+          version = os.environ["VERSION"]
+
+          # The package ids this run publishes, derived from PACKAGE_PROJECTS. This is
+          # also the only set of Febris.* ids a dependency is allowed to name.
+          expected = {
+              os.path.basename(line).rsplit(".csproj", 1)[0]
+              for line in os.environ["PACKAGE_PROJECTS"].split()
+              if line.strip()
+          }
+
+          problems, found = [], set()
+
+          for path in sorted(glob.glob("artifacts/*.nupkg")):
+              zf = zipfile.ZipFile(path)
+              root = ET.fromstring(zf.read(next(n for n in zf.namelist() if n.endswith(".nuspec"))))
+              ns = root.tag.split("}")[0].strip("{")
+              md = root.find("{%s}metadata" % ns)
+
+              def text(tag):
+                  el = md.find("{%s}%s" % (ns, tag))
+                  return (el.text or "").strip() if el is not None else ""
+
+              pid = text("id")
+              found.add(pid)
+              def bad(msg, _pid=pid, _path=path):
+                  problems.append("%s: %s" % (_pid or _path, msg))
+
+              if pid not in expected:
+                  bad("unexpected package id in artifacts/ -- this run should produce only %s"
+                      % ", ".join(sorted(expected)))
+              if text("version") != version:
+                  bad("<version> is %r but the tag says %r" % (text("version"), version))
+
+              authors = text("authors")
+              if not authors or authors == pid:
+                  bad("<authors> is %r, which is the dotnet pack default (the assembly name). "
+                      "Set <Authors> in the csproj." % authors)
+
+              desc = text("description")
+              if not desc or desc == "Package Description":
+                  bad("<description> is %r, which is the dotnet pack default. "
+                      "Set <Description> in the csproj." % desc)
+
+              lic = md.find("{%s}license" % ns)
+              if lic is None or lic.get("type") != "expression" or not (lic.text or "").strip():
+                  bad("no <license type=\"expression\">. Set "
+                      "<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression> in the csproj.")
+              elif (lic.text or "").strip() != "Apache-2.0":
+                  # Hard failure, matching the keystone workflow. Before 2026-08-28 this job only
+                  # checked that SOME expression was present, so a relicense would have shipped
+                  # silently. The licence is the thing most expensive to get wrong permanently.
+                  bad("<license> is %r, expected Apache-2.0. THIS IS A RELICENSING BUG."
+                      % (lic.text or "").strip())
+
+              repo = md.find("{%s}repository" % ns)
+              url = repo.get("url") if repo is not None else ""
+              if not url:
+                  bad("<repository> carries no url. Set <RepositoryUrl> and "
+                      "<RepositoryType>git</RepositoryType> in the csproj.")
+              elif "<org>" in url:
+                  bad("<repository url> still contains the <org> placeholder: %s" % url)
+
+              if "<org>" in text("projectUrl"):
+                  bad("<projectUrl> still contains the <org> placeholder: %s" % text("projectUrl"))
+
+              for dep in md.iter("{%s}dependency" % ns):
+                  did = dep.get("id", "")
+                  # Febris.XApi.Models is this repository's one external Febris dependency.
+                  # It is published from febris-xapi-models and MUST be live on nuget.org
+                  # before this workflow runs. It is named here rather than the check being
+                  # loosened, so any OTHER unexpected Febris.* dependency still fails.
+                  EXTERNAL = {"Febris.XApi.Models"}
+                  if did.startswith("Febris.") and did not in expected and did not in EXTERNAL:
+                      bad("depends on %s %s, which is not part of this push and is not on "
+                          "nuget.org. Pushing this package would publish an unresolvable "
+                          "dependency. See the ORDERING HAZARD note in this workflow."
+                          % (did, dep.get("version")))
+
+          for missing in sorted(expected - found):
+              problems.append("%s: no .nupkg was produced" % missing)
+
+          if problems:
+              print("nuspec audit FAILED. Nothing has been pushed to nuget.org.\n")
+              for p in problems:
+                  print("  - %s" % p)
+              sys.exit(1)
+
+          print("nuspec audit passed: %s" % ", ".join(sorted(found)))
+          PY
+
+      # Keep the packages even when the audit fails -- reading the .nuspec of the
+      # artifact that was rejected is the fastest way to see why.
+      - name: Upload the packages
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: triad-${{ steps.version.outputs.version }}
+          path: artifacts/*.nupkg
+          if-no-files-found: warn
+
+      # Pushed in PACKAGE_PROJECTS order, i.e. bottom-up through the dependency graph.
+      # nuget.org accepts them in any order, but pushing bottom-up narrows the window in
+      # which a consumer can restore a package whose dependency has not indexed yet.
+      # Indexing is asynchronous, so the window is narrowed, not closed.
+      #
+      # --skip-duplicate makes a re-run after a mid-push failure idempotent instead of
+      # failing on the version that already landed.
+      # Trusted Publishing: trade a GitHub OIDC token for a temporary nuget.org key.
+      # nuget.org issues keys valid for ONE HOUR and each token buys exactly one key, so
+      # this sits immediately before the push rather than earlier in the job. It carries
+      # the push step's own condition, because a dry run must not mint a credential it
+      # will never use.
+      #
+      # `user` is the nuget.org PROFILE NAME, not an email, and its case differs from the
+      # GitHub login (nuget Trget88, GitHub TRget88). It is not a secret: it is visible on
+      # the package pages and on the publishing policy itself.
+      - name: NuGet login (OIDC to a short-lived key)
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: Trget88
+
+      - name: Push to nuget.org
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NUGET_API_KEY}" ]; then
+            echo "::error::NuGet/login returned no key. Check that the nuget.org Trusted"
+            echo "::error::Publishing policy names this repository, the workflow file"
+            echo "::error::publish-shared.yml, the environment nuget-release, and that it"
+            echo "::error::lists all three package globs. The policy for febris-xapi-models"
+            echo "::error::does NOT cover this repository."
+            exit 1
+          fi
+          while read -r proj; do
+            [ -z "$proj" ] && continue
+            id="$(basename "$proj" .csproj)"
+            dotnet nuget push "artifacts/${id}.${VERSION}.nupkg" \
+              --source "$NUGET_SOURCE" \
+              --api-key "$NUGET_API_KEY" \
+              --skip-duplicate
+          done <<< "$PACKAGE_PROJECTS"
+
+      - name: Dry run summary
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: 'echo "Dry run: the three packages were built and audited but NOT pushed."'

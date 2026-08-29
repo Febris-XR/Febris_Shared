@@ -1,0 +1,88 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- NET8 Wave 1. Notable package
+         moves per the plan's bump table:
+         - Microsoft.Extensions.Caching.Redis 2.2.0 (deprecated, no net8 line) DROPPED;
+           replaced by Microsoft.Extensions.Caching.StackExchangeRedis + the namespace
+           swap in DistributedCacheExtensions.cs / RedisCacheTicketStore.cs.
+         - Microsoft.AspNetCore.WebUtilities 2.2.0 DROPPED -> in-box via the
+           Microsoft.AspNetCore.App FrameworkReference (QueryHelpers etc.).
+         - Microsoft.Extensions.Identity.Core 5.0.3 DROPPED -> comes transitively at
+           a unified 8.0.x via Identity.UI.
+         - System.IdentityModel.Tokens.Jwt 6.11 -> 8.x: TokenService compiles against
+           the new line; the Wave-4 gate runs the JWT hardware/license round-trip test
+           (IdentityModel 7+ rewrote its JSON layer - see plan risk register). -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Configurations>Debug;Release;Staging;NotStaging</Configurations>
+    <ApplicationIcon>Febris-icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="EmailTemplates\febrisbasic.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="EmailTemplates\febrisbasic.html">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="3.7.511.8" />
+    <PackageReference Include="MailKit" Version="4.16.0" />
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="8.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.10" />
+    <PackageReference Include="MimeKit" Version="4.16.0" />
+    <PackageReference Include="NCrontab.Signed" Version="3.3.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.2" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FebrisModelLibrary\Febris.ModelLibrary.csproj" />
+    <ProjectReference Include="..\FebrisEnumLibrary\Febris.EnumLibrary.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="SCORM\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Launcher\appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+
+  <!-- NuGet packaging. These three ship as Apache-2.0 packages from the febris-shared
+       repository's CI (owner ruling 2026-08-28, relicensed from AGPL-3.0-only; the packaging moved
+       out of the node with the triad extraction, see docs/decisions/TRIAD_OWNERSHIP.md). Without
+       this block `dotnet
+       pack` emits authors="<project name>" and description="Package Description" with NO licence
+       element at all, which must never reach nuget.org.
+       Version and RepositoryUrl are deliberately NOT set here: CI supplies them from the release
+       tag and the repository it is running in, so the package cannot disagree with the commit it
+       was built from. -->
+  <PropertyGroup>
+    <PackageId>Febris.SharedServices</PackageId>
+    <Authors>Febris</Authors>
+    <Product>Febris Node</Product>
+    <Description>Shared infrastructure services for the Febris node platform: transport hardening options, storage seam, mail, JWT signing-key provision, caching and CORS policy.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageTags>febris;lms;xapi;node</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+</Project>

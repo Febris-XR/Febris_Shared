@@ -1,0 +1,71 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- NET8 Wave 1. Mvc.ViewFeatures
+         2.2.0 dropped in favor of the FrameworkReference below (in-box on net8);
+         EF Core / Npgsql / Identity.EFCore bumped to the 8.0.x line per the plan's
+         package table (Npgsql host behavior is gated by the Wave-3 legacy-timestamp
+         switch before any host boots). -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Configurations>Debug;Release;Staging;NotStaging</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- Explicit on net8: the SCIM DTOs (ScimModels/ScimGroupModels/ScimPatchModels) are
+         Newtonsoft-annotated by design (SCIM wire format). On 3.1 Newtonsoft arrived
+         transitively via the old package set; the net8 set no longer brings it. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
+    <PackageReference Include="X.PagedList.Mvc.Core" Version="8.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FebrisEnumLibrary\Febris.EnumLibrary.csproj" />
+    <!-- KEYSTONE: the pure xAPI POCOs + interfaces now live in the netstandard2.0
+         Febris.XApi.Models package ( POCO-vs-EF split).
+         ModelLibrary references it so every existing consumer keeps the same FQNs
+         (namespaces are unchanged) and the node-specific types that stay here
+         (ExtraModels/*, ModifiedForSharing/LocalStatement) still see the core
+         types + interfaces transitively. -->
+    <PackageReference Include="Febris.XApi.Models" Version="0.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Models\LegalModels\" />
+  </ItemGroup>
+
+
+  <!-- NuGet packaging. These three ship as Apache-2.0 packages from the febris-shared
+       repository's CI (owner ruling 2026-08-28, relicensed from AGPL-3.0-only; the packaging moved
+       out of the node with the triad extraction, see docs/decisions/TRIAD_OWNERSHIP.md). Without
+       this block `dotnet
+       pack` emits authors="<project name>" and description="Package Description" with NO licence
+       element at all, which must never reach nuget.org.
+       Version and RepositoryUrl are deliberately NOT set here: CI supplies them from the release
+       tag and the repository it is running in, so the package cannot disagree with the commit it
+       was built from. -->
+  <PropertyGroup>
+    <PackageId>Febris.ModelLibrary</PackageId>
+    <Authors>Febris</Authors>
+    <Product>Febris Node</Product>
+    <Description>Entity and view models for the Febris node platform, including the EF Core entities, xAPI wire models and the distribution-feed contract.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageTags>febris;lms;xapi;node</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+</Project>

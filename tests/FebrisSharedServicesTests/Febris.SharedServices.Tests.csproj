@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- NET8 Wave 5a: flipped with the
+         shared tier it references. A netcoreapp3.1 test host cannot consume the now-net8
+         libs (NU1201), and the EOL 3.1 host needed the fragile libssl1.1-from-snap crutch
+         to even run on this VM. Runner quartet bumped to the versions the Wave-0 projects
+         proved out. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Configurations>Debug;Release;Staging</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.18.4" />
+    <PackageReference Include="FluentAssertions" Version="6.12.0" />
+    <!-- LOG-B1: exercised by SerilogStartupValidatorTests to resolve the "File" sink by name
+         through ReadFrom.Configuration (the exact host bootstrap path) and prove it writes to disk. -->
+    <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\FebrisSharedServices\Febris.SharedServices.csproj" />
+    <ProjectReference Include="..\..\shared\FebrisModelLibrary\Febris.ModelLibrary.csproj" />
+    <ProjectReference Include="..\..\shared\FebrisEnumLibrary\Febris.EnumLibrary.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "shared", "shared", "{6B2913A3-F782-40C5-8CD7-082D40E66ED2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Febris.EnumLibrary", "shared\FebrisEnumLibrary\Febris.EnumLibrary.csproj", "{F1309525-65E8-4C9F-8A43-D4BF4B2A3AC0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Febris.ModelLibrary", "shared\FebrisModelLibrary\Febris.ModelLibrary.csproj", "{CCA0BFFC-509F-4F22-9AC7-4968C85A7EA0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Febris.SharedServices", "shared\FebrisSharedServices\Febris.SharedServices.csproj", "{16763145-1902-4AAD-A610-9A0E73762CD8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2771FD90-8269-47A5-AC19-D5E5D6AB5D19}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Febris.SharedServices.Tests", "tests\FebrisSharedServicesTests\Febris.SharedServices.Tests.csproj", "{C89757C4-03EA-4E8B-9F3E-6AA49CB15661}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F1309525-65E8-4C9F-8A43-D4BF4B2A3AC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1309525-65E8-4C9F-8A43-D4BF4B2A3AC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1309525-65E8-4C9F-8A43-D4BF4B2A3AC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1309525-65E8-4C9F-8A43-D4BF4B2A3AC0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCA0BFFC-509F-4F22-9AC7-4968C85A7EA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CCA0BFFC-509F-4F22-9AC7-4968C85A7EA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCA0BFFC-509F-4F22-9AC7-4968C85A7EA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CCA0BFFC-509F-4F22-9AC7-4968C85A7EA0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{16763145-1902-4AAD-A610-9A0E73762CD8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{16763145-1902-4AAD-A610-9A0E73762CD8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{16763145-1902-4AAD-A610-9A0E73762CD8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{16763145-1902-4AAD-A610-9A0E73762CD8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C89757C4-03EA-4E8B-9F3E-6AA49CB15661}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C89757C4-03EA-4E8B-9F3E-6AA49CB15661}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C89757C4-03EA-4E8B-9F3E-6AA49CB15661}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C89757C4-03EA-4E8B-9F3E-6AA49CB15661}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F1309525-65E8-4C9F-8A43-D4BF4B2A3AC0} = {6B2913A3-F782-40C5-8CD7-082D40E66ED2}
+		{CCA0BFFC-509F-4F22-9AC7-4968C85A7EA0} = {6B2913A3-F782-40C5-8CD7-082D40E66ED2}
+		{16763145-1902-4AAD-A610-9A0E73762CD8} = {6B2913A3-F782-40C5-8CD7-082D40E66ED2}
+		{C89757C4-03EA-4E8B-9F3E-6AA49CB15661} = {2771FD90-8269-47A5-AC19-D5E5D6AB5D19}
+	EndGlobalSection
+EndGlobal
