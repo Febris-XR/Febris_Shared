@@ -23,6 +23,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- NODE-9. PCDataProtection exposes path-explicit overloads of the device-credential
+         accessors as internal, so the DPAPI round trip can be tested against a temp
+         directory instead of the operator's real Documents folder. Same pattern as
+         Febris.SharedLogicLayer. -->
+    <InternalsVisibleTo Include="Febris.SharedServices.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="EmailTemplates\febrisbasic.html" />
   </ItemGroup>
 

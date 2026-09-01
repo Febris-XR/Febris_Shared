@@ -97,6 +97,11 @@ namespace Febris.SharedServices.Launcher
         public static string userNameLocation = Path.Combine(sLocation, "user.dat");
         public static string passwordLocation = Path.Combine(sLocation, "s.dat");
         public static string ConfigLocation = Path.Combine(sLocation, "config.json");
+        // NODE-9. The device credential the node MINTS at registration, stored the same encrypted
+        // way as the user credentials beside it. This replaced deriving a licence from WMI: audit
+        // T9 made the node generate the credential and store only its hash, so a value the client
+        // computes for itself can never match. The operator copies the minted string in once.
+        public static string deviceCredentialLocation = Path.Combine(sLocation, "d.dat");
 
         //########################################################################
         //inside directory?

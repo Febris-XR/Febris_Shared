@@ -15,6 +15,13 @@ namespace Febris.SharedServices.Launcher
 {
     public class PCDataProtection
     {
+        // NULL LOGGER IS THE NORM HERE, NOT THE EXCEPTION. Every live construction of this class in
+        // the three PC clients uses the parameterless constructor, so _log is null in production.
+        // The error paths below are therefore null-conditional throughout: an unguarded
+        // _log.LogError inside a catch converts a HANDLED failure into a NullReferenceException
+        // that escapes the method, which is strictly worse than the failure it was reporting.
+        // Found by the NODE-9 tests, where "no credential stored yet" -- the normal state of an
+        // unregistered device -- came back as an NRE instead of an empty string.
         private ILogger _log;
         private IConfiguration _config;
 
@@ -47,7 +54,7 @@ namespace Febris.SharedServices.Launcher
             }
             catch (Exception ex)
             {
-                _log.LogError(ex.Message);
+                _log?.LogError(ex.Message);
             }
         }
 
@@ -101,7 +108,7 @@ namespace Febris.SharedServices.Launcher
             }
             catch (Exception ex)
             {
-                _log.LogError(ex.Message);
+                _log?.LogError(ex.Message);
                 throw;
             }
         }
@@ -125,7 +132,7 @@ namespace Febris.SharedServices.Launcher
             }
             catch (Exception ex)
             {
-                _log.LogError(ex.Message);
+                _log?.LogError(ex.Message);
             }
             throw new NotImplementedException();
         }
@@ -150,7 +157,7 @@ namespace Febris.SharedServices.Launcher
                 }
                 catch (Exception ex)
                 {
-                    _log.LogError(ex.Message);
+                    _log?.LogError(ex.Message);
                 }
                 try
                 {
@@ -163,7 +170,7 @@ namespace Febris.SharedServices.Launcher
                 }
                 catch (Exception ex)
                 {
-                    _log.LogError(ex.Message);
+                    _log?.LogError(ex.Message);
                 }
                 if (userSecretGathered && userNameGathered)
                 {
@@ -174,7 +181,7 @@ namespace Febris.SharedServices.Launcher
             }
             catch (Exception ex)
             {
-                _log.LogError(ex.Message);
+                _log?.LogError(ex.Message);
             }
             return (credsExist, userName, secret);
         }
@@ -210,10 +217,109 @@ namespace Febris.SharedServices.Launcher
             }
             catch (Exception ex)
             {
-                _log.LogError(ex.Message);
+                _log?.LogError(ex.Message);
                 return saved;
                 //throw;
             }
+        }
+
+        /// <summary>
+        /// The device credential this client authenticates to a node with (NODE-9).
+        ///
+        /// <para>
+        /// Clients used to derive a licence from WMI (processor id plus motherboard serial) and
+        /// send that. Audit T9 changed the node to MINT the credential at registration and store
+        /// only its hash, so a self-computed value cannot match any row: the derived-licence path
+        /// authenticates nothing. The node shows the minted string once, and the operator pastes
+        /// it into this client, which keeps it here encrypted at rest.
+        /// </para>
+        ///
+        /// <para>
+        /// Returns empty when nothing is stored. Callers must treat that as "not registered yet"
+        /// and say so, rather than falling back to a derived value that the node will reject with
+        /// an indistinguishable 401.
+        /// </para>
+        /// </summary>
+        public string GetDeviceCredential()
+        {
+            return GetDeviceCredential(PCFileSystem.deviceCredentialLocation);
+        }
+
+        /// <summary>
+        /// Path-explicit overload. Exists so the round trip can be exercised against a temporary
+        /// directory rather than writing into the operator's real Documents folder.
+        /// </summary>
+        internal string GetDeviceCredential(string path)
+        {
+            // Absence is the NORMAL state of a device nobody has registered yet, so it is checked
+            // rather than caught. Relying on the exception would run the common path through
+            // DecryptFile's catch, which rethrows.
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                return string.Empty;
+            }
+
+            string credential = string.Empty;
+            try
+            {
+                DecryptFile(out credential, path);
+            }
+            catch (Exception ex)
+            {
+                // The file exists but will not decrypt. The realistic cause is a credential file
+                // copied from another machine: the scope is LocalMachine, so DPAPI refuses it.
+                // Report empty so the caller says "not registered" rather than crashing.
+                _log?.LogError(ex.Message);
+                return string.Empty;
+            }
+            return credential ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Stores the credential the node minted. Whitespace is trimmed because the value is
+        /// copied by hand from a portal page and a trailing space would otherwise hash differently
+        /// and fail authentication with no clue why.
+        /// </summary>
+        public bool SetDeviceCredential(string credential)
+        {
+            return SetDeviceCredential(credential, PCFileSystem.deviceCredentialLocation);
+        }
+
+        /// <summary>Path-explicit overload. See <see cref="GetDeviceCredential(string)"/>.</summary>
+        internal bool SetDeviceCredential(string credential, string path)
+        {
+            string trimmed = (credential ?? string.Empty).Trim();
+            if (trimmed.Length == 0)
+            {
+                // Refuse rather than write nothing. An empty stored credential reads back as "not
+                // registered" anyway, and EncryptInput throws on a zero-length buffer, so
+                // reporting success here would be a lie either way.
+                return false;
+            }
+
+            try
+            {
+                // The credential directory is created by FileSystemInitalizer at startup, but this
+                // is reachable before that on a first run, and the resulting
+                // DirectoryNotFoundException would be swallowed by EncryptInput and reported as a
+                // successful save.
+                string directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                EncryptInput(trimmed, path);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogError(ex.Message);
+                return false;
+            }
+
+            // EncryptInput swallows its own failures, so "no exception" is not evidence that the
+            // write happened. Confirm the file exists before telling the caller it saved.
+            return File.Exists(path);
         }
 
         public async Task<bool> CredentialsExist()
@@ -234,7 +340,7 @@ namespace Febris.SharedServices.Launcher
             }
             catch (Exception ex)
             {
-                _log.LogError(ex.Message);
+                _log?.LogError(ex.Message);
             }
             return exist;
         }
