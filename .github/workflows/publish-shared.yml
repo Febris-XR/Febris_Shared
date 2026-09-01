@@ -24,6 +24,12 @@ name: publish-shared
 # loosening it. It is the only thing standing between a typo in the dependency graph and
 # a permanent bad version on nuget.org.
 #
+# The keystone is allowed BY ID AND BY VERSION (CHAN-9). The allowlist used to match on the
+# id alone, so a stale or mistyped pin walked straight through the one gate that exists to
+# catch it: the id was permitted, the version was never looked at, and the push burned a
+# permanent number on a package whose dependency cannot restore. The audit now asks
+# nuget.org's flatcontainer index whether the pinned version is actually published.
+#
 # (Historical note: this section once described the keystone as vendored in-tree and
 # absent from nuget.org. Febris.XApi.Models 0.1.0 went live on 2026-08-28 and the
 # vendored copy is gone -- the cut refuses to produce this export if it rides along.)
@@ -164,7 +170,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           python3 - <<'PY'
-          import os, sys, glob, zipfile
+          import os, sys, glob, json, zipfile, urllib.error, urllib.request
           import xml.etree.ElementTree as ET
 
           version = os.environ["VERSION"]
@@ -176,6 +182,32 @@ jobs:
               for line in os.environ["PACKAGE_PROJECTS"].split()
               if line.strip()
           }
+
+          # nuget.org's flatcontainer index lists every version published under a package id.
+          # It is the registry's own answer to "does this version exist", which is the only
+          # answer worth anything here: this runs seconds before a push that cannot be undone.
+          _versions_cache = {}
+
+          def nuget_versions(pid):
+              if pid not in _versions_cache:
+                  url = "https://api.nuget.org/v3-flatcontainer/%s/index.json" % pid.lower()
+                  try:
+                      with urllib.request.urlopen(url, timeout=30) as resp:
+                          body = json.loads(resp.read().decode("utf-8"))
+                      _versions_cache[pid] = {v.lower() for v in body.get("versions", [])}
+                  except urllib.error.HTTPError as e:
+                      if e.code != 404:
+                          # NOT the same as "no versions". The audit cannot prove the
+                          # dependency resolves, and a gate that cannot prove its case must
+                          # refuse rather than wave a permanent push through.
+                          print("audit FAILED: nuget.org answered HTTP %s for %s" % (e.code, url))
+                          sys.exit(1)
+                      # 404 means this id has never been published at all.
+                      _versions_cache[pid] = set()
+                  except Exception as e:
+                      print("audit FAILED: could not reach %s (%s)" % (url, e))
+                      sys.exit(1)
+              return _versions_cache[pid]
 
           problems, found = [], set()
 
@@ -234,6 +266,7 @@ jobs:
 
               for dep in md.iter("{%s}dependency" % ns):
                   did = dep.get("id", "")
+                  dver = (dep.get("version") or "").strip()
                   # Febris.XApi.Models is this repository's one external Febris dependency.
                   # It is published from febris-xapi-models and MUST be live on nuget.org
                   # before this workflow runs. It is named here rather than the check being
@@ -243,7 +276,24 @@ jobs:
                       bad("depends on %s %s, which is not part of this push and is not on "
                           "nuget.org. Pushing this package would publish an unresolvable "
                           "dependency. See the ORDERING HAZARD note in this workflow."
-                          % (did, dep.get("version")))
+                          % (did, dver))
+                  elif did in EXTERNAL:
+                      # CHAN-9. Being on the allowlist buys the ID a pass, not the VERSION.
+                      # dotnet pack writes a plain "0.1.0" for an ordinary pin and a
+                      # bracketed range for an exact one, and both carry the pinned number
+                      # as the lower bound, which is the version that has to exist.
+                      pinned = dver.strip("[]() ").split(",")[0].strip()
+                      if not pinned:
+                          bad("depends on %s with no version constraint. The keystone pin "
+                              "must name a version." % did)
+                      else:
+                          live = nuget_versions(did)
+                          if pinned.lower() not in live:
+                              bad("depends on %s %s, which is NOT published on nuget.org. "
+                                  "Live versions: %s. Either the csproj pin is stale or "
+                                  "mistyped, or the keystone has not been published yet. "
+                                  "See the DEPENDENCY GATE note in this workflow."
+                                  % (did, dver, ", ".join(sorted(live)) or "none"))
 
           for missing in sorted(expected - found):
               problems.append("%s: no .nupkg was produced" % missing)
