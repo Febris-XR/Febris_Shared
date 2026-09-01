@@ -331,7 +331,10 @@ jobs:
       # will never use.
       #
       # `user` is the nuget.org PROFILE NAME, not an email, and its case differs from the
-      # GitHub login (nuget Trget88, GitHub TRget88). It is not a secret: it is visible on
+      # GitHub login. The nuget profile is Trget88 and the GitHub USER is TRget88, differing only
+      # by the case of one letter, which is exactly why a blind owner rename can break publishing:
+      # the repositories now live under the Febris-XR org, but this field is the nuget ACCOUNT and
+      # must not follow that move. It is not a secret: it is visible on
       # the package pages and on the publishing policy itself.
       - name: NuGet login (OIDC to a short-lived key)
         if: ${{ github.event_name == 'push' || !inputs.dry_run }}
